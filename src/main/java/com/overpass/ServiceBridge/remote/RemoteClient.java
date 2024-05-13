@@ -266,7 +266,6 @@ public class RemoteClient {
 
         // 数据类型校验：取一条，进行验证
         if(!DataUtil.isNumberObject((JSONObject)currentDataJSONArray.get(0), groupFields)) DataUtil.recordLogAndThrow(configInfo + "存在不是数字的字段，无法进行聚合操作，请核查！");
-//        List<JSONObject> groupMergeList = new ArrayList<>();
 
         /** 聚合 **/
         ConfigInterfaceQuery.GroupMerge groupMerge = configInterfaceQuery.getGroupMerges().get(0);
