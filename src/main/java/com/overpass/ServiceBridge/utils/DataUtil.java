@@ -3,8 +3,11 @@ package com.overpass.ServiceBridge.utils;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.date.DateUtil;
+import cn.hutool.core.util.NumberUtil;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson2.JSON;
+import com.google.common.collect.Lists;
 import com.googlecode.aviator.AviatorEvaluator;
 import com.googlecode.aviator.AviatorEvaluatorInstance;
 import com.googlecode.aviator.Expression;
@@ -17,13 +20,13 @@ import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.apache.logging.log4j.core.util.Assert;
 import org.springframework.beans.BeanUtils;
-import org.springframework.lang.Nullable;
 import org.springframework.util.CollectionUtils;
 
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
@@ -31,6 +34,7 @@ import java.time.ZoneId;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * @ClassName DataUtil
@@ -147,7 +151,7 @@ public class DataUtil {
      * @Author: wqb
      * @Date: 2021/1/20 15:12
     **/
-    public static void judgeCollectEmptyToRecordLogAndThrow(@Nullable Collection<?> collection){
+    public static void judgeCollectEmptyToRecordLogAndThrow(Collection<?> collection){
         judgeCollectEmptyToRecordLogAndThrow(collection, "数据集为空。");
     }
 
@@ -159,7 +163,7 @@ public class DataUtil {
      * @Author: wqb
      * @Date: 2021/1/20 15:12
     **/
-    public static void judgeCollectEmptyToRecordLogAndThrow(@Nullable Collection<?> collection, String errorMsg){
+    public static void judgeCollectEmptyToRecordLogAndThrow(Collection<?> collection, String errorMsg){
         if(CollectionUtils.isEmpty(collection)){
             log.error(errorMsg);
             throw new RuntimeException(errorMsg);
@@ -174,7 +178,7 @@ public class DataUtil {
      * @Author: wqb
      * @Date: 2021/1/20 15:12
     **/
-    public static void judgeCollectEmptyToRecordLogAndThrowBusinessException(@Nullable Collection<?> collection, String errorMsg){
+    public static void judgeCollectEmptyToRecordLogAndThrowBusinessException(Collection<?> collection, String errorMsg){
         if(CollectionUtils.isEmpty(collection)){
             log.error(errorMsg);
             throw new BusinessException(errorMsg);
@@ -189,26 +193,26 @@ public class DataUtil {
      * @Author: wqb
      * @Date: 2021/1/20 15:12
     **/
-    public static void judgeCollectEmptyToRecordLogAndThrow(@Nullable Map<?, ?> map, String errorMsg){
+    public static void judgeCollectEmptyToRecordLogAndThrow(Map<?, ?> map, String errorMsg){
         if(CollectionUtils.isEmpty(map)){
             log.error(errorMsg);
             throw new RuntimeException(errorMsg);
         }
     }
 
-    public static Boolean giveUpConditionJudge(JSONObject jsonObject, String giveUpConditionField){
+    public static Boolean giveUpConditionJudge(JSONObject jsonObject, String giveUpConditionField, String configInfo){
         if(StringUtils.isNotBlank(giveUpConditionField)){
             Object giveUpCondition = new Object();
             if(giveUpConditionField.contains(":")){
                 String startFields = giveUpConditionField.substring(0, giveUpConditionField.indexOf(":"));
                 String endFields = giveUpConditionField.substring(giveUpConditionField.lastIndexOf(":")+1);
                 if(DataUtil.isNumber(startFields) && Integer.valueOf(startFields) == 0){
-                    giveUpCondition = DataUtil.operation(jsonObject, endFields, true, false, null);
+                    giveUpCondition = DataUtil.operation(jsonObject, endFields, true, false, null, configInfo);
                 }else{
-                    giveUpCondition = DataUtil.operation(jsonObject, endFields, false, false, null);
+                    giveUpCondition = DataUtil.operation(jsonObject, endFields, false, false, null, configInfo);
                 }
             }else {
-                giveUpCondition = DataUtil.operation(jsonObject, giveUpConditionField, true, false, null);
+                giveUpCondition = DataUtil.operation(jsonObject, giveUpConditionField, true, false, null, configInfo);
             }
             log.info("放弃生成条件判断结果：{} 条件：{}", giveUpCondition, giveUpConditionField);
             if(giveUpCondition instanceof Boolean){
@@ -552,17 +556,17 @@ public class DataUtil {
      * @param defaultVal
      * @return
      */
-    public static String explainJsonWithField(JSONObject jsonObj, String objField, String defaultVal){
+    public static String explainJsonWithField(JSONObject jsonObj, String objField, String defaultVal, String configInfo){
         String resultVal = null;
         if(objField.equals("?")){
-            if(StringUtils.isBlank(defaultVal)) DataUtil.recordLogAndThrow("固定参数不可为空，请核查！");
+            if(StringUtils.isBlank(defaultVal)) DataUtil.recordLogAndThrow(configInfo + "固定参数不可为空，请核查！");
             return defaultVal;
         }
         if (objField.startsWith("#")) { // 代表 需要计算，通过计算表达式 计算所得
             // #表达式处理
             objField = objField.trim();
             objField = objField.substring(1);
-            Object operationVal = DataUtil.operation(jsonObj, objField, true, null);
+            Object operationVal = DataUtil.operation(jsonObj, objField, true, null, configInfo);
 //            log.info("explainField() end --->>> outJson：{}; inJson：{}; fieldStyle：{}; isNum:{}; solid:{}", outJson, inJson, fieldStyle, isNum, solid);
             return String.valueOf(operationVal);
         }
@@ -580,33 +584,41 @@ public class DataUtil {
 
 //        if(StringUtils.isBlank(resultVal)) DataUtil.recordLogAndThrow("字段"+objField+"读取为null，请核对配置类型是否为 a 或 a.b.c 格式，不可为 a:b 格式。如果格式正确，请检查数据源是否具有相应值。");
         if(StringUtils.isBlank(resultVal)) {
-            log.info("字段 {} 读取为null，请核对配置类型是否为 a 或 a.b.c 格式，不可为 a:b 格式。如果格式正确，请检查数据源是否具有相应值。", objField);
+            log.info(configInfo + "字段 {} 读取为null，请核对配置类型是否为 a 或 a.b.c 格式，不可为 a:b 格式。如果格式正确，请检查数据源是否具有相应值。", objField);
         }
 //        log.info("explainJsonWithField() ==== jsonObj：{}；objField：{}；resultVal：{}", jsonObj, objField, resultVal);
         return resultVal;
     }
 
-    public static void explainResponse(JSONObject outJson, JSONObject inJson, String fields, String solid){
+    public static void explainResponse(JSONObject outJson, JSONObject inJson, String fields, String solid, String configInfo){
         String[] split = fields.split(",");
-        explainResponse(outJson, inJson, split, solid);
+        explainResponse(outJson, inJson, split, solid, configInfo);
     }
 
-    public static void explainResponse(JSONObject outJson, JSONObject inJson, String[] split, String solid){
+    public static void explainResponse(JSONObject outJson, JSONObject inJson, String[] split, String solid, String configInfo){
         try {
             for (String fieldStyle : split) {
                 if(fieldStyle.startsWith("*")){
                     outJson.put(fieldStyle.substring(1,2), fieldStyle.substring(2));
                     continue;
                 }
-                DataUtil.explainField(outJson, inJson, fieldStyle, true, solid);
+                DataUtil.explainField(outJson, inJson, fieldStyle, true, solid, configInfo);
             }
         }catch(Exception e){
-            log.info("发生异常：{}", e.getMessage());
+            log.info(configInfo + "发生异常：{}", e.getMessage());
             log.info(DataUtil.getStackTraceInfo(e));
         }
     }
 
-    public static void explainField(JSONObject outJson, JSONObject inJson, String fieldStyle, boolean isNum, String solid){
+    public static void explainFieldToMap(Map<String, Object> outMap, JSONObject inJson, String fieldStyle, boolean isNum, String solid, String configInfo){
+        JSONObject outJson = new JSONObject();
+        DataUtil.explainField(outJson, inJson, fieldStyle, isNum, solid, configInfo);
+        for (String key : outJson.keySet()) {
+            outMap.put(key, outJson.get(key));
+        }
+    }
+
+    public static void explainField(JSONObject outJson, JSONObject inJson, String fieldStyle, boolean isNum, String solid, String configInfo){
 //        log.info("explainField() begin ---<<< inJson：{}; fieldStyle：{}; isNum:{}; solid:{}", inJson, fieldStyle, isNum, solid);
         if (!fieldStyle.contains(":")) {
             outJson.put(fieldStyle, inJson.getString(fieldStyle));
@@ -616,10 +628,10 @@ public class DataUtil {
         String innerFieldKey = fieldStyle.substring(0, fieldStyle.indexOf(":"));  // 返回指定字符在字符串中第一次出现处的索引，如果此字符串中没有这样的字符，则返回 -1
         String innerFieldValue = fieldStyle.substring(fieldStyle.indexOf(":") + 1);
         if (StringUtils.isBlank(innerFieldKey)) {
-            DataUtil.recordLogAndThrow("返回值读取配置 key 有误，请检查格式！参照格式：key1:value1,key2:value2.value22");
+            DataUtil.recordLogAndThrow(configInfo + "返回值读取配置 key 有误，请检查格式！参照格式：key1:value1,key2:value2.value22");
         }
         if (StringUtils.isBlank(innerFieldValue)) {
-            DataUtil.recordLogAndThrow("返回值读取配置 value 有误，请检查格式！参照格式：key1:value1,key2:value2.value22");
+            DataUtil.recordLogAndThrow(configInfo + "返回值读取配置 value 有误，请检查格式！参照格式：key1:value1,key2:value2.value22");
         }
         innerFieldKey = innerFieldKey.trim();
         innerFieldValue = innerFieldValue.trim();
@@ -630,25 +642,25 @@ public class DataUtil {
         }
         if (innerFieldValue.startsWith("#")) { // 代表 需要计算，通过计算表达式 计算所得
             // #表达式处理
-            Object operationVal = DataUtil.operation(inJson, innerFieldValue, isNum, solid);
+            Object operationVal = DataUtil.operation(inJson, innerFieldValue, isNum, solid, configInfo);
             outJson.put(innerFieldKey, operationVal);
 //            log.info("explainField() end --->>> outJson：{}; fieldStyle：{}; isNum:{}; solid:{}", outJson, fieldStyle, isNum, solid);
             return;
         }
         if (innerFieldValue.startsWith("@")) { // 代表 需要拼接，通过拼接、计算表达式 计算所得
             // #表达式处理
-            Object operationVal = DataUtil.operation(inJson, innerFieldValue, false, false, solid);
+            Object operationVal = DataUtil.operation(inJson, innerFieldValue, false, false, solid, configInfo);
             outJson.put(innerFieldKey, operationVal);
 //            log.info("explainField() end --->>> outJson：{}; fieldStyle：{}; isNum:{}; solid:{}", outJson, fieldStyle, isNum, solid);
             return;
         }
         if (innerFieldValue.startsWith("%")) { /** 有时间考虑，使用 常规通用 的数据结构 **/
             if (innerFieldValue.length() < 3 && !DataUtil.isNumber(innerFieldValue.substring(1, 2)))
-                DataUtil.recordLogAndThrow("格式化配置有问题，请检查配置！当前为：" + innerFieldValue);
+                DataUtil.recordLogAndThrow(configInfo + "格式化配置有问题，请检查配置！当前为：" + innerFieldValue);
             Integer style = Integer.valueOf(innerFieldValue.substring(1, 2));
             PublicConstants.ExplainStyleEnum enumByCode = PublicConstants.ExplainStyleEnum.getEnumByCode(style);
             innerFieldValue = innerFieldValue.substring(2);
-            innerFieldValue = DataUtil.explainJsonWithField(inJson, innerFieldValue, solid);
+            innerFieldValue = DataUtil.explainJsonWithField(inJson, innerFieldValue, solid, configInfo);
             switch (enumByCode) {
                 case STYLE_DATE:  // 日期处理：1-yyyy-MM-dd
                     try {
@@ -672,48 +684,48 @@ public class DataUtil {
                     break;
             }
         } else {
-            innerFieldValue = DataUtil.explainJsonWithField(inJson, innerFieldValue, solid);
+            innerFieldValue = DataUtil.explainJsonWithField(inJson, innerFieldValue, solid, configInfo);
         }
         outJson.put(innerFieldKey, innerFieldValue);
 //        log.info("explainField() end --->>> outJson：{}; fieldStyle：{}; isNum:{}; solid:{}", outJson, fieldStyle, isNum, solid);
     }
 
     // 运算
-    public static Object operation(JSONObject json, String objFieldStyle, boolean isNum, String solid){
-        return operation(json, objFieldStyle, isNum, true, solid);
+    public static Object operation(JSONObject json, String objFieldStyle, boolean isNum, String solid, String configInfo){
+        return operation(json, objFieldStyle, isNum, true, solid, configInfo);
     }
 
-    public static Object operation(JSONObject json, String objFieldStyle, boolean isNum, boolean setScale, String solid){
+    public static Object operation(JSONObject json, String objFieldStyle, boolean isNum, boolean setScale, String solid, String configInfo){
         String substring = objFieldStyle.contains("@")?(objFieldStyle.substring(objFieldStyle.indexOf("@")+1)):objFieldStyle.substring(objFieldStyle.lastIndexOf("#")+1);
         substring = substring.trim(); // 去除 前后空格
         String expression = substring.substring(0, substring.lastIndexOf("|"));
         String expressionFields = substring.substring(substring.lastIndexOf("|")+1);
-        if(StringUtils.isBlank(expression)) DataUtil.recordLogAndThrow("依据|截取后，表达式为空，请核查！");
-        if(StringUtils.isBlank(expressionFields)) DataUtil.recordLogAndThrow("依据|截取后，取值字段为空，请核查！");
+        if(StringUtils.isBlank(expression)) DataUtil.recordLogAndThrow(configInfo + "依据|截取后，表达式为空，请核查！");
+        if(StringUtils.isBlank(expressionFields)) DataUtil.recordLogAndThrow(configInfo + "依据|截取后，取值字段为空，请核查！");
         String[] valueFields = expressionFields.split("&");
         JSONObject response = new JSONObject();
-        DataUtil.explainResponse(response, json, valueFields, solid);
+        DataUtil.explainResponse(response, json, valueFields, solid, configInfo);
         Map<String, Object> paramsMap = new HashMap<>();
         for (Map.Entry entry : response.entrySet()) {
             Object val = entry.getValue();
-            if(Objects.isNull(val)) DataUtil.recordLogAndThrow("字段: "+entry.getKey()+" 未取到值，请核查！");
+            if(Objects.isNull(val)) DataUtil.recordLogAndThrow(configInfo + "字段: "+entry.getKey()+" 未取到值，请核查！");
             if(isNum) {
                 paramsMap.put((String) entry.getKey(), new BigDecimal((String) val));
                 continue;
             }
             paramsMap.put((String)entry.getKey(), val);
         }
-        return calculator(expression, isNum, setScale, paramsMap);
+        return calculator(expression, isNum, setScale, paramsMap, configInfo);
     }
 
     // 计算器
-    public static Object calculator(String expression, boolean isNum, Map<String, Object> paramsMap){
-        return calculator(expression, isNum, true, paramsMap);
+    public static Object calculator(String expression, boolean isNum, Map<String, Object> paramsMap, String configInfo){
+        return calculator(expression, isNum, true, paramsMap, configInfo);
     }
 
-    public static Object calculator(String expression, boolean isNum, boolean setScale, Map<String, Object> paramsMap){
+    public static Object calculator(String expression, boolean isNum, boolean setScale, Map<String, Object> paramsMap, String configInfo){
 //        log.info("calculator() begin ===== <<< expression：{}；isNum：{}；paramsMap：{}", expression, isNum, JSON.toJSONString(paramsMap));
-        if(StringUtils.isBlank(expression)) DataUtil.recordLogAndThrow("表达式为空，请核查！");
+        if(StringUtils.isBlank(expression)) DataUtil.recordLogAndThrow(configInfo + "表达式为空，请核查！");
         AviatorEvaluatorInstance instance = AviatorEvaluator.newInstance();
         if(isNum) instance.setOption(Options.ALWAYS_PARSE_FLOATING_POINT_NUMBER_INTO_DECIMAL, true);
         Expression compiledExp = instance.compile(expression);
@@ -758,6 +770,7 @@ public class DataUtil {
 
     /**
      * 集合转字符串，去除 普通 toString()，随着元素的增多，字符串内元素间隔空格增大的问题。
+     *
      * @param c
      * @return
      */
@@ -779,6 +792,7 @@ public class DataUtil {
 
     /**
      * 字符串追加，超过指定数值，则丢弃前面部分。
+     *
      * Examples:
      *  oldStrArray: [5060, 5061, 5061, 5062]
      *  appendTailStr: 5063
@@ -860,4 +874,450 @@ public class DataUtil {
         });
         return ;
     }
+
+    /**
+     * 字符串 转 HashMap
+     *
+     * @param inputStr  （其他默认参数说明 delimiterRegex 分隔符 default: ";"  connectorRegex 连接符 default: "="）
+     * @return
+     */
+    public static Map<String, String> strToMap(String inputStr) {
+        return strToMap(inputStr, ";", "=");
+    }
+
+    /**
+     * 字符串 转 HashMap
+     *
+     * @param inputStr
+     * @param connectorRegex 连接符 default: "="   (其他默认参数说明 delimiterRegex 分隔符 default: ";")
+     * @return
+     */
+    public static Map<String, String> strToMap(String inputStr, String connectorRegex) {
+        return strToMap(inputStr, ";", connectorRegex);
+    }
+
+    /**
+     * 字符串 转 HashMap
+     *
+     * @param inputStr
+     * @param delimiterRegex    分隔符 default: ";"
+     * @param connectorRegex    连接符 default: "="
+     * @return
+     */
+    public static Map<String, String> strToMap(String inputStr, String delimiterRegex, String connectorRegex) {
+        inputStr = inputStr.replace("\n","");   // 去除 换行符
+        inputStr = inputStr.replace(" ","");    // 去除 空格
+        return Stream.of(inputStr.split(delimiterRegex))
+                .map(kv -> kv.split(connectorRegex))
+                .filter(kv -> kv.length == 2)
+                .collect(Collectors.toMap(kv -> kv[0], kv -> kv[1]));
+    }
+
+    public static void explainKeys(JSONArray totalListJSON, JSONObject outputJSONObject, JSONObject inputJSONObject,
+                                        Map<String, String> fieldsMap) {
+        DataUtil.explainKeys(totalListJSON, outputJSONObject, inputJSONObject, fieldsMap, 1, "", "");
+    }
+
+    public static void explainKeys(JSONArray totalListJSON, JSONObject outputJSONOArray, JSONObject inputJSONObject,
+                                        Map<String, String> fieldsMap, String contentField) {
+        DataUtil.explainKeys(totalListJSON, outputJSONOArray, inputJSONObject, fieldsMap, 1, "", contentField);
+    }
+
+    private static void explainKeys(JSONArray totalListJSON, JSONObject outputJSONObject, JSONObject inputJSONObject,
+                                        Map<String, String> fieldsMap, int level, String eField, String contentField) {
+        String sLevelKey = (level==1) ? (level + "s") : (level + "s" + "-" + eField);
+        String eLevelKey = (level==1) ? (level + "e") : (level + "e" + "-" + eField);
+        String aLevelKey = (level==1) ? (level + "a") : (level + "a" + "-" + eField);
+        // 全取时，全收录
+        if((level==1)&&StringUtils.isBlank(contentField)) totalListJSON.add(outputJSONObject);
+
+        // 单值
+        if(fieldsMap.containsKey(sLevelKey)){
+            String sKeys = fieldsMap.get(sLevelKey);
+            if(!sKeys.contains(",")){
+                DataUtil.explainKey(outputJSONObject, inputJSONObject, sKeys);
+            }else{
+                String[] sKeyFields = sKeys.split(",");
+                for(String sKeyField: sKeyFields){
+                    DataUtil.explainKey(outputJSONObject, inputJSONObject, sKeyField);
+                }
+            }
+        }
+
+        // 实体对象
+        if(fieldsMap.containsKey(eLevelKey)){
+            String eKeys = fieldsMap.get(eLevelKey);
+            int eLevel = level + 1;
+            if(!eKeys.contains(",")){
+                DataUtil.explainKeys(totalListJSON, outputJSONObject, (JSONObject) inputJSONObject.get(eKeys), fieldsMap, eLevel, eKeys, contentField);
+            }else{
+                String[] sKeyFields = eKeys.split(",");
+                for(String sKeyField: sKeyFields){
+                    DataUtil.explainKeys(totalListJSON, outputJSONObject, (JSONObject) inputJSONObject.get(sKeyField), fieldsMap, eLevel, sKeyField, contentField);
+                }
+            }
+        }
+
+        // 数组
+        if(fieldsMap.containsKey(aLevelKey)){
+            int aLevel = level + 1;
+            String eKeys = fieldsMap.get(aLevelKey);
+            if(!eKeys.contains(",")){
+                DataUtil.explainArray(totalListJSON, outputJSONObject, inputJSONObject, fieldsMap, aLevel, eKeys, contentField);
+            }else{
+                String[] sKeyFields = eKeys.split(",");
+                for(String sKeyField: sKeyFields){
+                    DataUtil.explainArray(totalListJSON, outputJSONObject, inputJSONObject, fieldsMap, aLevel, sKeyField, contentField);
+                }
+            }
+        }
+    }
+
+    public static void explainArray(JSONArray totalListJSON, JSONObject outputJSONObject, JSONObject inputJSONObject, Map<String, String> fieldsMap, int level, String sKeyField, String contentField) {
+        JSONArray jsonArray = inputJSONObject.getJSONArray(sKeyField);
+        if(CollectionUtil.isNotEmpty(jsonArray)){
+            Object jsonObj = jsonArray.get(0);
+            if(!(jsonObj instanceof JSONObject)){
+                outputJSONObject.put(sKeyField, jsonArray);
+            }else {
+                JSONArray innerJsonArray = new JSONArray();
+                // 结果集 合并存放
+                outputJSONObject.put(sKeyField, innerJsonArray);
+                for (int i = 0; i < jsonArray.size(); i++) {
+                    JSONObject innerJSONObject = new JSONObject();
+                    innerJsonArray.add(innerJSONObject);
+                    DataUtil.explainKeys(totalListJSON, innerJSONObject, (JSONObject) jsonArray.get(i), fieldsMap, level, sKeyField, contentField);
+                }
+                // 结果集 单独存放
+                if(StringUtils.equals(sKeyField, contentField)) {
+                    totalListJSON.addAll(innerJsonArray);
+                    if(outputJSONObject.containsKey(contentField)){
+                        // 外层 去除 结果集，避免重复存放
+                        outputJSONObject.remove(contentField);
+                    }
+                }
+            }
+        }else{
+            outputJSONObject.put(sKeyField, Lists.newArrayList());
+        }
+    }
+
+    public static void explainKey(JSONObject outputJSONObject, JSONObject inputJSONObject, String eKeys) {
+        if(!eKeys.contains(",")){
+            DataUtil.explainSimpleField(outputJSONObject, inputJSONObject, eKeys);
+        }else{
+            String[] sKeyFields = eKeys.split(",");
+            for(String sKeyField: sKeyFields){
+                DataUtil.explainSimpleField(outputJSONObject, inputJSONObject, sKeyField);
+            }
+        }
+    }
+
+    public static void explainSimpleField(JSONObject outputJSONObject, JSONObject inputJSONObject, String eKeys) {
+        if(!eKeys.contains("=")){
+            outputJSONObject.put(eKeys, inputJSONObject.get(eKeys));
+        }else{
+            // "oldField=newField"
+            String oldField = eKeys.substring(0, eKeys.indexOf("="));
+            String newField = eKeys.substring(eKeys.indexOf("=")+1);
+            outputJSONObject.put(newField, inputJSONObject.get(oldField));
+        }
+    }
+
+    public static boolean judge(JSONObject inputJSONObject, String condition, String configInfo) {
+        if(!condition.contains("#")){
+            String keyField = condition.substring(0, condition.indexOf("="));
+            String valField = condition.substring(condition.lastIndexOf("=")+1);
+            if(StringUtils.equals(valField.toLowerCase(), "true") || StringUtils.equals(valField.toLowerCase(), "false")){
+                if(inputJSONObject.containsKey(keyField)) {
+                    Object o = inputJSONObject.get(keyField);
+                    String oStr = o.toString().toLowerCase();
+                    if(StringUtils.equals(oStr, valField.toLowerCase())){
+                        return true;
+                    }
+                }
+            }
+        }
+
+        try {
+            Object operation = DataUtil.operation(inputJSONObject, condition, true, false, null, configInfo);
+            if (operation instanceof Boolean && Boolean.TRUE.equals(operation)) {
+                return true;
+            }
+        }catch (Exception e){
+            DataUtil.recordLogAndThrow(configInfo + "judge() 判断条件配置，无法计算出 Boolean 类型值，请核对配置！"+condition);
+        }
+
+        return false;
+    }
+
+    public void explainData(JSONArray outputJSONArray, JSONObject outputJSONObject, JSONArray inputJSONArray, String fields, String contentField){
+        inputJSONArray.stream().forEach(json-> explainData(outputJSONArray, outputJSONObject, (JSONObject)json, fields, contentField));
+    }
+
+    /***
+     * 属性层级类型
+     * a.b
+     * a.b.c
+     * a.b.d
+     * a.b.e.f
+     * a.b.e.g
+     *
+     * field
+     * 1s: status,code,msg;
+     * 1e: content;
+     * 2a-content: list;
+     * 2s-content: total;
+     * 2e-content: page;
+     * 3s-page: pageNum,pageSize,size,pages,prePage,nextPage,isFirstPage,isLastPage;
+     * 3s-list: id,branchId,ownerId,orderNo,outStoreId,finishTime,createTime,payPriceTotal;
+     * 3e-list: order,wms;
+     * 4s-wms: wmsId,wmsName;
+     * 4s-order: orderNo,orderState,memberId;
+     *
+     * e：代表 有子属性，取子属性
+     * a：代表 为数组类型，遍历取
+     * s：代表 单属性，直取
+     * 重命名 连接符为 “=”
+     * fields：.status,msg,content,total.list[].id,branchId,ownerId,orderNo,orderState,outStoreId,originalPriceTotal,createTime,finishTime
+     * @param totalListJSON
+     * @param inputJSONObject
+     * @param fields
+     */
+    public static void explainData(JSONArray totalListJSON, JSONObject outputJSONObject, JSONObject inputJSONObject, String fields, String contentField){
+        Map<String, String> fieldsMap = DataUtil.strToMap(fields, ":");
+        DataUtil.explainKeys(totalListJSON, outputJSONObject, inputJSONObject, fieldsMap, contentField);
+        log.debug("执行结果：\n" + JSON.toJSONString(outputJSONObject));
+    }
+
+    /***
+     * JSONArray 取指定数量的元素
+     *
+     * @param outputJSONArray
+     * @param inputJSONArray
+     * @param limit
+     * @return
+     */
+    public static int jsonArrayLimit(JSONArray outputJSONArray, JSONArray inputJSONArray, int limit) {
+        if(limit==0) return 0;
+        if(CollectionUtil.isEmpty(inputJSONArray)) return 0;
+        int size = inputJSONArray.size();
+        if(limit > size) {
+            outputJSONArray.addAll(inputJSONArray);
+            return size;
+        }
+        for(int i=0;i<limit;i++){
+            outputJSONArray.add(inputJSONArray.get(i));
+        }
+        return limit;
+    }
+
+    /***
+     * 根据连接符 进行取值（默认连接符为 = ）
+     * @param outMap
+     * @param inputJSONObject
+     * @param condition
+     */
+    public static void explainJsonToMap(Map<String, Object> outMap, JSONObject inputJSONObject, String condition) {
+        String connectorRegex = "=";
+        if(condition.contains(connectorRegex)){
+            String newKey = condition.substring(0, condition.indexOf(connectorRegex));
+            String oldKey = condition.substring(condition.indexOf(connectorRegex)+1);
+            outMap.put(newKey, inputJSONObject.get(oldKey));
+        }
+    }
+
+    /***
+     * 根据连接符 进行取值
+     * @param outMap
+     * @param inputJSONObject
+     * @param condition
+     * @param connectorRegex
+     */
+    public static void explainJsonToMap(Map<String, Object> outMap, JSONObject inputJSONObject, String condition, String connectorRegex) {
+        if(condition.contains(connectorRegex)){
+            String newKey = condition.substring(0, condition.indexOf(connectorRegex));
+            String oldKey = condition.substring(condition.indexOf(connectorRegex)+1);
+            outMap.put(newKey, inputJSONObject.get(oldKey));
+        }
+    }
+
+    /**
+     * 根据 聚合类型 执行聚合操作
+     *
+     * @param oneJson
+     * @param jsonList          同组对象集
+     * @param fields            需求聚合字段集
+     * @param mergeStyleEnum    聚合类型 枚举
+     * @param configInfo
+     */
+    public static void mergeByStyle(JSONObject oneJson, List<JSONObject> jsonList, String[] fields, PublicConstants.MergeStyleEnum mergeStyleEnum, String configInfo) {
+        if(CollectionUtil.isEmpty(oneJson)) DataUtil.recordLogAndThrow(configInfo + "聚合时，取分组后第一个对象，为空，请核查！");
+        if(org.bouncycastle.util.Arrays.isNullOrEmpty(fields)) return;
+        switch (mergeStyleEnum){
+            case AVG:
+                JSONObject avg = DataUtil.avg(jsonList, fields, configInfo);
+                oneJson.putAll(avg);
+                break;
+            case MAX:
+                JSONObject max = DataUtil.max(jsonList, fields, configInfo);
+                oneJson.putAll(max);
+                break;
+            case MIN:
+                JSONObject min = DataUtil.min(jsonList, fields, configInfo);
+                oneJson.putAll(min);
+                break;
+            case SUM:
+                JSONObject sum = DataUtil.sum(jsonList, fields, configInfo);
+                oneJson.putAll(sum);
+                break;
+        }
+    }
+
+    /**
+     * 平均数
+     *
+     * @param jsonList
+     * @param avgFields     需求平均值字段集
+     * @param configInfo
+     * @return
+     */
+    public static JSONObject avg(List<JSONObject> jsonList, String[] avgFields, String configInfo){
+//        JSONObject oneJson = jsonList.get(0);
+        JSONObject oneJson = new JSONObject();
+        if(avgFields.length==1){
+            String field = avgFields[0];
+            BigDecimal sum = jsonList.stream().map(e -> NumberUtil.toBigDecimal((String) e.get(field))).reduce(BigDecimal.ZERO, BigDecimal::add);
+            oneJson.put(field, NumberUtil.div(sum, jsonList.size()).setScale(2, RoundingMode.DOWN));                    // TODO: 精度配置
+
+            return oneJson;
+        }
+
+        Map<String, BigDecimal> fieldMap = new HashMap<>();
+        for(JSONObject json : jsonList){
+            for (String field: avgFields) {
+                fieldMap.put(field, NumberUtil.add(fieldMap.getOrDefault(field, BigDecimal.ZERO), NumberUtil.toBigDecimal((String) json.get(field))));
+            }
+        }
+        for(Map.Entry<String, BigDecimal> entry : fieldMap.entrySet()){
+            oneJson.put(entry.getKey(), entry.getValue().divide(new BigDecimal(jsonList.size()), 2, RoundingMode.DOWN));    // TODO: 精度配置
+        }
+
+        return oneJson;
+    }
+
+    /**
+     * 最小值
+     *
+     * @param jsonList
+     * @param minFields     需求最小值字段集
+     * @param configInfo
+     * @return
+     */
+    public static JSONObject min(List<JSONObject> jsonList, String[] minFields, String configInfo){
+//        JSONObject oneJson = jsonList.get(0);
+        JSONObject oneJson = new JSONObject();
+        if(minFields.length==1){
+            String field = minFields[0];
+            JSONObject jsonObject = jsonList.stream().collect(Collectors.minBy((s1, s2) -> NumberUtil.sub(NumberUtil.toBigDecimal((String) s1.get(field)), NumberUtil.toBigDecimal((String) s2.get(field))).intValue())).get();
+            oneJson.put(field, jsonObject.get(field));
+            return oneJson;
+        }
+
+//        JSONObject oneJson = jsonList.get(0);
+        Map<String, BigDecimal> fieldMap = new HashMap<>();
+        for(JSONObject json : jsonList){
+            for (String field: minFields) {
+                int flag = NumberUtil.compare(fieldMap.getOrDefault(field, BigDecimal.ZERO).doubleValue(), NumberUtil.toBigDecimal((String) json.get(field)).doubleValue());
+                if(flag>0){ // a > b,取 b进行覆盖；否则，保留原小数
+                    fieldMap.put(field, NumberUtil.toBigDecimal((String) json.get(field)));
+                }
+            }
+        }
+        for(Map.Entry<String, BigDecimal> entry : fieldMap.entrySet()){
+            oneJson.put(entry.getKey(), entry.getValue());
+        }
+
+        return oneJson;
+    }
+
+    /**
+     * 最大值
+     *
+     * @param jsonList
+     * @param maxFields     需求最大值字段集
+     * @param configInfo
+     * @return
+     */
+    public static JSONObject max(List<JSONObject> jsonList, String[] maxFields, String configInfo){
+//        JSONObject oneJson = jsonList.get(0);
+        JSONObject oneJson = new JSONObject();
+        if(maxFields.length==1){
+            String field = maxFields[0];
+            JSONObject jsonObject = jsonList.stream().collect(Collectors.minBy((s1, s2) -> NumberUtil.sub(NumberUtil.toBigDecimal((String) s1.get(field)), NumberUtil.toBigDecimal((String) s2.get(field))).intValue())).get();
+            oneJson.put(field, jsonObject.get(field));
+            return oneJson;
+        }
+
+//        JSONObject oneJson = jsonList.get(0);
+        Map<String, BigDecimal> fieldMap = new HashMap<>();
+        for(JSONObject json : jsonList){
+            for (String field: maxFields) {
+                int flag = NumberUtil.compare(fieldMap.getOrDefault(field, BigDecimal.ZERO).doubleValue(), NumberUtil.toBigDecimal((String) json.get(field)).doubleValue());
+                if(flag<0){// a < b,取 b进行覆盖；否则，保留原大数
+                    fieldMap.put(field, NumberUtil.toBigDecimal((String) json.get(field)));
+                }
+
+            }
+        }
+        for(Map.Entry<String, BigDecimal> entry : fieldMap.entrySet()){
+            oneJson.put(entry.getKey(), entry.getValue());
+        }
+
+        return oneJson;
+    }
+
+    /**
+     * 累加值
+     *
+     * @param jsonList
+     * @param sumFields     需求累加值字段集
+     * @param configInfo
+     * @return
+     */
+    public static JSONObject sum(List<JSONObject> jsonList, String[] sumFields, String configInfo){
+//        JSONObject oneJson = jsonList.get(0);
+        JSONObject oneJson = new JSONObject();
+        if(sumFields.length==1){
+            String field = sumFields[0];
+            BigDecimal sum = jsonList.stream().map(e -> NumberUtil.toBigDecimal((String) e.get(field))).reduce(BigDecimal.ZERO, BigDecimal::add);
+            oneJson.put(field, sum);
+
+            return oneJson;
+        }
+
+        Map<String, BigDecimal> fieldMap = new HashMap<>();
+        for(JSONObject json : jsonList){
+            for (String field: sumFields) {
+                fieldMap.put(field, NumberUtil.add(fieldMap.getOrDefault(field, BigDecimal.ZERO), NumberUtil.toBigDecimal((String) json.get(field))));
+            }
+        }
+        for(Map.Entry<String, BigDecimal> entry : fieldMap.entrySet()){
+            oneJson.put(entry.getKey(), entry.getValue());
+        }
+
+        return oneJson;
+    }
+
+
+    public static boolean isNumberObject(JSONObject obj, String[] fields) {
+        for(String field : fields){
+            Object val = obj.get(field);
+            if(!(val instanceof Number) && !NumberUtils.isCreatable((String) val)){
+                return false;
+            }
+        }
+        return true;
+    }
+
 }

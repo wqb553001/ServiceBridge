@@ -26,10 +26,10 @@ class ServiceBridgeApplicationTests {
         ConfigInterfaceQuery configInterfaceQuery = ConfigInterfaceQuery.builder()
                 .httpUrlStr(httpUrlStr)
                 .method(method)
-                .respDataField("content:content.list")
+                .respDataFields("content:content.list")
                 .build();
         String configInfo = "测试";
-        remoteClient.query(configHO, httpUrlStr, requestBody, method, configInterfaceQuery, configInfo);
+        remoteClient.onceQuery(null, configInterfaceQuery, configInfo);
 	}
 
 }

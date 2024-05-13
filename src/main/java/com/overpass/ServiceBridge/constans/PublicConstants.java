@@ -375,4 +375,92 @@ public class PublicConstants {
 
     }
 
+    /**
+     　* 聚合方式
+       *
+       * {text: 'avg 平均值',		value: 10},
+       * {text: 'min 最小值',		value: 20},
+       * {text: 'max 最大值',		value: 30},
+       * {text: 'sum 累加值',		value: 40},
+     　* @author wqb
+     　* @date 2024-5-12
+     　*/
+    public enum MergeStyleEnum {
+        AVG(10, "平均值", "avg", "AVG"),
+        MIN(20, "最小值", "min", "MIN"),
+        MAX(20, "最大值", "max", "MAX"),
+        SUM(30, "累加值", "sum", "SUM");
+
+        @Getter private Integer code;
+        @Getter private String name;
+        @Getter private String desc;
+        @Getter private String descUp;
+
+        MergeStyleEnum(Integer code, String name, String desc, String descUp) {
+            this.code = code;
+            this.name = name;
+            this.desc = desc;
+            this.descUp = descUp;
+        }
+
+        //通过code获取描述
+        public static String getName(Integer code) {
+            MergeStyleEnum[] values = MergeStyleEnum.values();
+            for (int i = 0; i < values.length; i++) {
+                MergeStyleEnum be = values[i];
+                if (be.code.equals(code)) {
+                    return be.name;
+                }
+            }
+            return "";
+        }
+
+        //通过code获取描述
+        public static String getDesc(Integer code) {
+            MergeStyleEnum[] values = MergeStyleEnum.values();
+            for (int i = 0; i < values.length; i++) {
+                MergeStyleEnum be = values[i];
+                if (be.code.equals(code)) {
+                    return be.desc;
+                }
+            }
+            return "";
+        }
+
+        //通过code获取 descUp
+        public static String getDescUp(Integer code) {
+            MergeStyleEnum[] values = MergeStyleEnum.values();
+            for (int i = 0; i < values.length; i++) {
+                MergeStyleEnum be = values[i];
+                if (be.code.equals(code)) {
+                    return be.descUp;
+                }
+            }
+            return "";
+        }
+
+        //通过描述获取code
+        public static int getCode(String name) {
+            MergeStyleEnum[] values = MergeStyleEnum.values();
+            for (int i = 0; i < values.length; i++) {
+                MergeStyleEnum be = values[i];
+                if (be.name.equalsIgnoreCase(name)) {
+                    return be.code;
+                }
+            }
+            return 0;
+        }
+
+        //通过code获取枚举对象
+        public static MergeStyleEnum getEnumByCode(Integer code) {
+            for (MergeStyleEnum flagEnum : MergeStyleEnum.values()) {
+                if (code.equals(flagEnum.getCode())) {
+                    return flagEnum;
+                }
+            }
+            return null;
+        }
+
+    }
+
 }

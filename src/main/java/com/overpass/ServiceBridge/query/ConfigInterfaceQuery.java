@@ -3,8 +3,10 @@ package com.overpass.ServiceBridge.query;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author wqb
@@ -17,36 +19,56 @@ import java.util.Map;
 public class ConfigInterfaceQuery {
 
     /** 目标数据 **/
+    @Schema(description = "服务名称")
+    private String name;
+
     @Schema(description = "服务地址")
     private String httpUrlStr;
-
-    @Schema(description = "请求参数")
-    private Map<String, Object> requestBody;
 
     @Schema(description = "请求方式", defaultValue = "POST", allowableValues = {"GET", "POST"})
     private String method;
 
-    @Schema(description = "返回内容字段")
-    private String respDataField = "content";
+    @Schema(description = "header", example = "token=abcdef;Content-Type=application/json")
+    private String headers;
 
-    @Schema(description = "状态值字段")
-    private String status = "status";
-
-    @Schema(description = "数据集字段")
-    private String list = "list";
-
-    @Schema(description = "是否通过接口分页(0否 1是)")
-    private Integer needPage = 1;
-    @Schema(description = "分页大小")
-    private Integer pageSize = 100;
-
-    @Schema(description = "末页判断：(1)无需判断*;(2)直接读取isLastPage:isLastPage;(3)表达式计算")
-    private String isLastPageFields; // = "isLastPage:isLastPage"
-
-
-    /** 源数据 **/
-    @Schema(description = "请求入参")
+    @Schema(description = "请求入参:固定参数", example = "orderStatus = 1;flow = 1")
     private String requestParams;
+
+    @Schema(description = "结果集字段", example = "list")
+    private String dataContentField;
+
+    @Schema(description = "成功状态值，字段取值判断条件", example = "status = 0")
+    private String isSuccessfulCondition;
+
+    /** 分页 **/
+    @Schema(description = "分页：0-分页全取；1-取1条；2-取指定数量")
+    private int limit;
+    @Schema(description = "指定条数")
+    private int limitNum;
+    @Schema(description = "下一页策略：1-递增页号;2-指针顺取", example = "1",allowableValues = {"1", "2"} )
+    private int nextPageStrategy;
+    @Schema(description = "下一页", example = "page = page + 1")
+    private String nextPageField;
+    @Schema(description = "每页取数", example = "pageNum = 200")
+    private String pageNumField;
+    @Schema(description = "末页判断：(1)无需判断*;(2)直接读取isLastPage:isLastPage;(3)表达式计算")
+    private String isLastPageCondition; // = "isLastPage:isLastPage"
+
+
+    /** 分组聚合 **/
+    @NoArgsConstructor
+    @Data
+    public class GroupMerge{
+        private int opt;
+        private int time;
+        private String groupField;
+        private String mergeField;
+    }
+
+    private String[] groupFields; // 未了方便写主干代码，先拿出来，后续再放回
+
+    private GroupMerge groupMerge = new GroupMerge();
+    private List<GroupMerge> groupMerges = new ArrayList<>();
 
     private InterfaceQuery interfaceQuery;
 
@@ -56,8 +78,15 @@ public class ConfigInterfaceQuery {
 
 
 
-    @Schema(description = "业务线")
-    private Integer businessType;
+    @Schema(description = "返回内容字段集", example = "1s: status,code,msg;\n" +
+            "1e: content;\n" +
+            "2a-content: list;\n" +
+            "2s-content: total;\n" +
+            "2e-content: page;")
+    private String respDataFields;
+
+    @Schema(description = "数据集字段")
+    private String list;
 
     @Schema(description = "服务名")
     private String serviceName = "tc-ocs-v1";
@@ -79,8 +108,5 @@ public class ConfigInterfaceQuery {
 
     @Schema(description = "业务截止时间")
     private String bussEndTime;
-
-    @Schema(description = "货主字段")
-    private String shopIdField;
 }
 
