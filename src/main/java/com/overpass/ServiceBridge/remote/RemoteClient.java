@@ -83,14 +83,14 @@ public class RemoteClient {
     }
 
     // 需要分页 请求
-    public void pageQuery(ConfigInterfaceQuery configInterfaceQuery, String configInfo){
+    public void pageQuery(JSONArray totalListJSON, ConfigInterfaceQuery configInterfaceQuery, String configInfo){
         RequestCondition requestCondition = this.buildNewRequestCondition(configInterfaceQuery);
         Map<String, Object> requestBody = requestCondition.getRequestBody();
         // 每页显示数
         if(StringUtils.isNotBlank(configInterfaceQuery.getPageNumField()))  requestBody.putAll(DataUtil.strToMap(configInterfaceQuery.getPageNumField(), "="));
-        boolean flag = this.onceQuery(requestCondition, configInterfaceQuery, configInfo);
+        boolean flag = this.onceQuery(totalListJSON, requestCondition, configInterfaceQuery, configInfo);
         while (requestCondition.continuePage && flag){
-            flag = this.onceQuery(requestCondition, configInterfaceQuery, configInfo);
+            flag = this.onceQuery(totalListJSON, requestCondition, configInterfaceQuery, configInfo);
         }
 
     }
@@ -110,10 +110,9 @@ public class RemoteClient {
      * @param configInterfaceQuery
      * @param configInfo
      */
-    public boolean onceQuery(RequestCondition requestCondition, ConfigInterfaceQuery configInterfaceQuery, String configInfo){
+    public boolean onceQuery(JSONArray totalListJSON, RequestCondition requestCondition, ConfigInterfaceQuery configInterfaceQuery, String configInfo){
         log.info("--<<--query()------开始-----begin---");
         long startTime = System.currentTimeMillis();
-        JSONArray totalListJSON = new JSONArray();
         if(Objects.isNull(requestCondition))  requestCondition = this.buildNewRequestCondition(configInterfaceQuery);
         //执行 POST 请求
         ResponseEntity responseEntity = null;
@@ -183,6 +182,7 @@ public class RemoteClient {
         JSONArray responseBodyJSONArray;
         if(responseBodyObj instanceof JSONArray){
             JSONArray currentDataJSONArray = new JSONArray();
+            JSONArray rspJSONArray = new JSONArray();
             responseBodyJSONArray = (JSONArray)responseBodyObj;
             JSONObject outputJSONObject = new JSONObject();
             boolean flag = false;
@@ -196,27 +196,36 @@ public class RemoteClient {
             if(!flag){// 没有任何数据
                 DataUtil.recordLogAndThrow(configInfo+"没有任何数据");
             }
-            totalListJSON.addAll(currentDataJSONArray);
+
+            /** 分组聚合 **/
+            this.groupMerge(rspJSONArray, currentDataJSONArray, configInterfaceQuery, configInfo);
+
+            totalListJSON.addAll(rspJSONArray);
             return currentDataJSONArray.size();
         }
 
         if(responseBodyObj instanceof JSONObject) {
             JSONArray currentDataJSONArray = new JSONArray();
+            JSONArray rspJSONArray = new JSONArray();
             responseBodyJSONObject = (JSONObject) responseBodyObj;
             JSONObject outputJSONObject = new JSONObject();
             DataUtil.explainData(currentDataJSONArray, outputJSONObject, responseBodyJSONObject, configInterfaceQuery.getRespDataFields(), configInterfaceQuery.getDataContentField());
+
+            /** 分组聚合 **/
+            this.groupMerge(rspJSONArray, currentDataJSONArray, configInterfaceQuery, configInfo);
+
             if (!DataUtil.judge(outputJSONObject, configInterfaceQuery.getIsSuccessfulCondition(), configInfo))
                 DataUtil.recordLogAndThrow(configInfo + "结果状态判断为：不可用。");
             // 分页：0-分页全取；1-取1条；2-取指定数量
             if (configInterfaceQuery.getLimit() == 1) {
-                totalListJSON.add(currentDataJSONArray.get(0));
+                totalListJSON.add(rspJSONArray.get(0));
                 return 1;
             }
             // 2-取指定数量
             if (configInterfaceQuery.getLimit() == 2)
-                return DataUtil.jsonArrayLimit(totalListJSON, currentDataJSONArray, configInterfaceQuery.getLimitNum());
+                return DataUtil.jsonArrayLimit(totalListJSON, rspJSONArray, configInterfaceQuery.getLimitNum());
             // 0-分页全取
-            totalListJSON.addAll(currentDataJSONArray);
+            totalListJSON.addAll(rspJSONArray);
             int currentSize = currentDataJSONArray.size();
             // 末页判断：是末页，结束分页
             if (DataUtil.judge(outputJSONObject, configInterfaceQuery.getIsLastPageCondition(), configInfo))
@@ -227,7 +236,7 @@ public class RemoteClient {
             // 下一页策略：1-递增页号;2-指针顺取
             int nextPageStrategy = configInterfaceQuery.getNextPageStrategy();
             String nextPageField = configInterfaceQuery.getNextPageField();
-            if(StringUtils.isBlank(nextPageField)) DataUtil.recordLogAndThrow(configInfo+"分页取类型下，下一页字段配置不能为空！");
+            if(StringUtils.isBlank(nextPageField)) DataUtil.recordLogAndThrow(configInfo + "分页取类型下，下一页字段配置不能为空！");
             if (nextPageStrategy == 1) { // 1-递增页号;
                 // 将下一页的页号，放入 requestBody 中
                 DataUtil.explainFieldToMap(requestBody, outputJSONObject, nextPageField, true, "", configInfo);
@@ -248,10 +257,11 @@ public class RemoteClient {
      * @param configInterfaceQuery
      * @param configInfo
      */
-    private void groupMerge(List<JSONObject> groupMergeList, JSONArray currentDataJSONArray, ConfigInterfaceQuery configInterfaceQuery, String configInfo){
+    private void groupMerge(JSONArray groupMergeList, JSONArray currentDataJSONArray, ConfigInterfaceQuery configInterfaceQuery, String configInfo){
         String[] groupFields = configInterfaceQuery.getGroupFields();
         if(Arrays.isNullOrEmpty(groupFields)) {
             log.debug(configInfo + "未配置分组字段，不必进行【后置分组】操作。");
+            groupMergeList.addAll(currentDataJSONArray);
             return;
         }
         /** 分组 **/
@@ -261,6 +271,7 @@ public class RemoteClient {
             for(int i=0;i<groupFields.length-1;i++){
                 groupKey += ("-" + inputJSON.get(groupFields[i]));
             }
+            log.debug(configInfo + "分组 groupKey-{}:{}", String.join("-", groupFields), groupKey);
             return groupKey;
         }));
 

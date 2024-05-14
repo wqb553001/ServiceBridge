@@ -1,0 +1,34 @@
+spring:
+  profiles:
+    active: local
+  application:
+    name: overpass-service-bridge
+
+server:
+  port: 8088
+#mybatis:
+#  type-aliases-package: com.nexneo.web.pojo.model
+#  mapper-locations: classpath:mapper/*.xml
+#  configuration:
+#    map-underscore-to-camel-case: true
+#    log-impl: org.apache.ibatis.logging.log4j2.Log4j2Impl
+#    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+
+
+#logging:
+#  config: classpath:log4j2_${spring.profiles.active}.yml
+#  level:
+#    com.nexneo.*: debug
+#    com.nexneo.web.mapper: debug
+#    # 去除无关异常打印 >>>>>>>>>>> xxl-job provider netty_http server caught exception
+#    com.xxl.job.core.server.EmbedServer: OFF
+
+## 商品信息批量新增的数量
+#nexneo-web-insertGoodsBatchNum: 500
+## 商品信息-允许更新的开关
+#nexneo-web-goodsInfoAllowUpdateClose: true
+## 用户信息批量新增的数量
+#nexneo-web-insertUserBatchNum: 500
+## 用户信息-允许更新的开关
+#nexneo-web-userInfoAllowUpdateClose: true

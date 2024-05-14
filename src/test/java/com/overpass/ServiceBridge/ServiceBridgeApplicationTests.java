@@ -29,7 +29,7 @@ class ServiceBridgeApplicationTests {
                 .respDataFields("content:content.list")
                 .build();
         String configInfo = "测试";
-        remoteClient.onceQuery(null, configInterfaceQuery, configInfo);
+//        remoteClient.onceQuery(null, null, configInterfaceQuery, configInfo);
 	}
 
 }

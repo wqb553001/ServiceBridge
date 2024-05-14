@@ -1,6 +1,7 @@
 package com.overpass.ServiceBridge.query;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -14,6 +15,8 @@ import java.util.List;
  * @description: 来源配置
  * @date 2021-11-5 17:51:12
  */
+@AllArgsConstructor
+@NoArgsConstructor
 @Builder
 @Data
 public class ConfigInterfaceQuery {
