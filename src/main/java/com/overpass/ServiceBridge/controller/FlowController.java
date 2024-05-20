@@ -11,17 +11,17 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Collection;
 
-@Tag(name = "服务中心", description = "服务桥梁")
+@Tag(name = "服务中心-流程", description = "流程管理")
 @Log4j2
 @RestController
-@RequestMapping("overpass/service-bridge/main")
-public class ServiceBridgeController {
+@RequestMapping("overpass/service-bridge/flow")
+public class FlowController {
 
     private static JSONObject map = new JSONObject();
-    private static String INTERFACE_FLAG = "interface-";
+    private static String FLOW_FLAG = "flow-";
 
     @ResponseBody
-    @PostMapping("/interface/add")
+    @PostMapping("/add")
     public Result add(@RequestBody Config config){
         log.info("访问接口 add（）参数为：{}", config.getBaseFormData());
         JSONArray parse = (JSONArray)JSONArray.parse(config.getBaseFormData());
@@ -29,8 +29,8 @@ public class ServiceBridgeController {
         if(CollectionUtil.isNotEmpty(parse)){
             parse.forEach(e -> {
                 JSONObject interfaceJson = (JSONObject)e;
-                log.info("interfaceJson:{}", interfaceJson);
-                String key = INTERFACE_FLAG + interfaceJson.get("id").toString();
+                log.info("flowJson:{}", interfaceJson);
+                String key = FLOW_FLAG + interfaceJson.get("id").toString();
                 if(map.containsKey(key)){
                     map.getJSONObject(key).putAll(interfaceJson);
                 }else{
@@ -43,36 +43,36 @@ public class ServiceBridgeController {
     }
 
     @ResponseBody
-    @PostMapping("/interface/update")
+    @PostMapping("/update")
     public Result update(@RequestBody Config config){
         log.info("访问接口 update（）参数为：{}", config.getBaseFormData());
         JSONObject parse = (JSONObject)JSONObject.parse(config.getBaseFormData());
-        map.put(INTERFACE_FLAG + parse.get("id").toString(), parse);
+        map.put(FLOW_FLAG + parse.get("id").toString(), parse);
         return new Result();
     }
 
 
     @ResponseBody
-    @GetMapping("/interface/findById")
-    public Result findInterfaceById(@RequestParam String interfaceId){
-        log.info("访问接口 findById（）参数为：{}", interfaceId);
-        JSONObject some = map.getJSONObject(INTERFACE_FLAG + interfaceId);
+    @GetMapping("/findById")
+    public Result findFlowById(@RequestParam String flowId){
+        log.info("访问接口 findById（）参数为：{}", flowId);
+        JSONObject some = map.getJSONObject(FLOW_FLAG + flowId);
         log.info("findById（）返回值：{}", some);
         return new Result(some);
     }
 
     @ResponseBody
-    @GetMapping("/interface/deleteById")
-    public Result deleteInterfaceById(@RequestParam String interfaceId){
-        log.info("访问接口 deleteInterfaceById（）参数为：{}", interfaceId);
-        String key = INTERFACE_FLAG + interfaceId;
+    @GetMapping("/deleteById")
+    public Result deleteFlowById(@RequestParam String flowId){
+        log.info("访问接口 deleteInterfaceById（）参数为：{}", flowId);
+        String key = FLOW_FLAG + flowId;
         if(map.containsKey(key)) map.remove(key);
         log.info("移除：{}", key);
         return new Result();
     }
 
     @ResponseBody
-    @GetMapping("/interface/findAll")
+    @GetMapping("/findAll")
     public Result findAll(@RequestParam Integer status){
         log.info("访问接口 findAll（）参数为：{}", status);
         Collection<Object> values = map.values();

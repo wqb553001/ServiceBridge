@@ -3,6 +3,6 @@ package com.overpass.ServiceBridge.vo;
 import lombok.Data;
 
 @Data
-public class InterfaceConfig {
+public class Config {
     private String baseFormData;
 }

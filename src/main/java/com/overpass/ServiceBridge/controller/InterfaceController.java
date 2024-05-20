@@ -11,17 +11,17 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Collection;
 
-@Tag(name = "服务中心", description = "服务桥梁")
+@Tag(name = "服务中心-接口", description = "接口管理")
 @Log4j2
 @RestController
-@RequestMapping("overpass/service-bridge/main")
-public class ServiceBridgeController {
+@RequestMapping("overpass/service-bridge/interface")
+public class InterfaceController {
 
     private static JSONObject map = new JSONObject();
     private static String INTERFACE_FLAG = "interface-";
 
     @ResponseBody
-    @PostMapping("/interface/add")
+    @PostMapping("/add")
     public Result add(@RequestBody Config config){
         log.info("访问接口 add（）参数为：{}", config.getBaseFormData());
         JSONArray parse = (JSONArray)JSONArray.parse(config.getBaseFormData());
@@ -43,7 +43,7 @@ public class ServiceBridgeController {
     }
 
     @ResponseBody
-    @PostMapping("/interface/update")
+    @PostMapping("/update")
     public Result update(@RequestBody Config config){
         log.info("访问接口 update（）参数为：{}", config.getBaseFormData());
         JSONObject parse = (JSONObject)JSONObject.parse(config.getBaseFormData());
@@ -53,7 +53,7 @@ public class ServiceBridgeController {
 
 
     @ResponseBody
-    @GetMapping("/interface/findById")
+    @GetMapping("/findById")
     public Result findInterfaceById(@RequestParam String interfaceId){
         log.info("访问接口 findById（）参数为：{}", interfaceId);
         JSONObject some = map.getJSONObject(INTERFACE_FLAG + interfaceId);
@@ -62,7 +62,7 @@ public class ServiceBridgeController {
     }
 
     @ResponseBody
-    @GetMapping("/interface/deleteById")
+    @GetMapping("/deleteById")
     public Result deleteInterfaceById(@RequestParam String interfaceId){
         log.info("访问接口 deleteInterfaceById（）参数为：{}", interfaceId);
         String key = INTERFACE_FLAG + interfaceId;
@@ -72,7 +72,7 @@ public class ServiceBridgeController {
     }
 
     @ResponseBody
-    @GetMapping("/interface/findAll")
+    @GetMapping("/findAll")
     public Result findAll(@RequestParam Integer status){
         log.info("访问接口 findAll（）参数为：{}", status);
         Collection<Object> values = map.values();
