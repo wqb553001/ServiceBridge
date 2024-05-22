@@ -32,8 +32,10 @@ public class FlowController {
                 log.info("flowJson:{}", interfaceJson);
                 String key = FLOW_FLAG + interfaceJson.get("id").toString();
                 if(map.containsKey(key)){
+                    // 更新
                     map.getJSONObject(key).putAll(interfaceJson);
                 }else{
+                    // 新增
                     map.put(key, interfaceJson);
                 }
             });
@@ -73,7 +75,7 @@ public class FlowController {
 
     @ResponseBody
     @GetMapping("/findAll")
-    public Result findAll(@RequestParam Integer status){
+    public Result findAll(@RequestParam String status){
         log.info("访问接口 findAll（）参数为：{}", status);
         Collection<Object> values = map.values();
         log.info("findAll（）返回值：{}", values);
